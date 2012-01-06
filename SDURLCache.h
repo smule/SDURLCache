@@ -52,4 +52,22 @@
  */
 - (BOOL)isCached:(NSURL *)url;
 
+/*
+ * Tells the cache whether to ignore the Last-Modified headers. Normally a simple heuristic is used if no explicit
+ * cache duration is given; if this is set to YES then the cache will just store all cacheable responses for the
+ * default cache duration.
+ */
+@property (nonatomic, assign) BOOL ignoreLastModified;
+
+/*
+ * Defines how long to cache items that don't have an explicit cache duration or if the Last-Modified heuristic
+ * is not being used.
+ */
+@property (nonatomic, assign) NSTimeInterval defaultCacheDuration;
+
+/*
+ * Returns whether a cached response is fresh enough to be used as-is, without any extra revalidation.
+ */
+- (BOOL)isCachedResponseFresh:(NSCachedURLResponse *)response;
+
 @end

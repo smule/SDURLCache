@@ -402,7 +402,7 @@ static dispatch_queue_t get_disk_io_queue() {
 /*
  * This method tries to determine the expiration date based on a response headers dictionary.
  */
-+ (NSDate *)expirationDateFromHeaders:(NSDictionary *)headers withStatusCode:(NSInteger)status {
+- (NSDate *)expirationDateFromHeaders:(NSDictionary *)headers withStatusCode:(NSInteger)status {
     if (status != 200 && status != 203 && status != 300 && status != 301 && status != 302 && status != 307 && status != 410) {
         // Uncacheable response status code
         return nil;
@@ -465,7 +465,7 @@ static dispatch_queue_t get_disk_io_queue() {
     
     // If no cache control defined, try some heristic to determine an expiration date
     NSString *lastModified = [headers objectForKey:@"Last-Modified"];
-    if (lastModified) {
+    if (lastModified && !self.ignoreLastModified) {
         NSTimeInterval age = 0;
         NSDate *lastModifiedDate = [SDURLCache dateFromHttpDateString:lastModified];
         if (lastModifiedDate) {
@@ -476,7 +476,8 @@ static dispatch_queue_t get_disk_io_queue() {
     }
     
     // If nothing permitted to define the cache expiration delay nor to restrict its cacheability, use a default cache expiration delay
-    return [[[NSDate alloc] initWithTimeInterval:kAFURLCacheDefault sinceDate:now] autorelease];
+    NSTimeInterval duration = (self.defaultCacheDuration > 0) ? self.defaultCacheDuration : kAFURLCacheDefault;
+    return [[[NSDate alloc] initWithTimeInterval:duration sinceDate:now] autorelease];
 }
 
 - (NSMutableDictionary *)diskCacheInfo {
@@ -637,6 +638,13 @@ static dispatch_queue_t get_disk_io_queue() {
     return [[paths objectAtIndex:0] stringByAppendingPathComponent:kAFURLCachePath];
 }
 
+-(BOOL)isCachedResponseFresh:(NSCachedURLResponse *)cachedResponse
+{
+    NSHTTPURLResponse *response = (NSHTTPURLResponse *)cachedResponse.response;
+    NSDate *expiration = [self expirationDateFromHeaders:response.allHeaderFields withStatusCode:response.statusCode];
+    return expiration && ([expiration compare:[NSDate date]] == NSOrderedDescending);
+}
+
 #pragma mark NSURLCache
 
 - (id)initWithMemoryCapacity:(NSUInteger)memoryCapacity diskCapacity:(NSUInteger)diskCapacity diskPath:(NSString *)path {
@@ -670,8 +678,8 @@ static dispatch_queue_t get_disk_io_queue() {
         NSDictionary *headers = [(NSHTTPURLResponse *)cachedResponse.response allHeaderFields];
         // RFC 2616 section 13.3.4 says clients MUST use Etag in any cache-conditional request if provided by server
         if (![headers objectForKey:@"Etag"]) {
-            NSDate *expirationDate = [SDURLCache expirationDateFromHeaders:headers
-                                                            withStatusCode:((NSHTTPURLResponse *)cachedResponse.response).statusCode];
+            NSDate *expirationDate = [self expirationDateFromHeaders:headers
+                                           withStatusCode:((NSHTTPURLResponse *)cachedResponse.response).statusCode];
             if (!expirationDate || [expirationDate timeIntervalSinceNow] - _minCacheInterval <= 0) {
                 // This response is not cacheable, headers said
                 return;
@@ -768,9 +776,12 @@ static dispatch_queue_t get_disk_io_queue() {
     [super dealloc];
 }
 
+
 @synthesize minCacheInterval = _minCacheInterval;
 @synthesize ignoreMemoryOnlyStoragePolicy = _ignoreMemoryOnlyStoragePolicy;
 @synthesize diskCachePath = _diskCachePath;
 @synthesize diskCacheInfo = _diskCacheInfo;
+@synthesize ignoreLastModified;
+@synthesize defaultCacheDuration;
 
 @end
