@@ -699,7 +699,8 @@ static dispatch_queue_t get_disk_io_queue() {
     if (memoryResponse) {
         return memoryResponse;
     }
-    
+
+    NSAssert(request.URL, @"Must have a valid URL. If you're getting a crash here, try setting a breakpoint in -[AFURLConnectionOperation initWithRequest:] to see who's sending you bad shiz.");
     NSString *cacheKey = [SDURLCache cacheKeyForURL:request.URL];
     
     // NOTE: We don't handle expiration here as even staled cache data is necessary for NSURLConnection to handle cache revalidation.
