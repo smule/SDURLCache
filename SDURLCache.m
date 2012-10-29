@@ -23,6 +23,7 @@
 
 #import "SDURLCache.h"
 #import <CommonCrypto/CommonDigest.h>
+#import "JRSwizzle.h"
 
 #define kAFURLCachePath @"SDNetworkingURLCache"
 #define kAFURLCacheMaintenanceTime 5ull
@@ -269,6 +270,49 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
     return(date);
 }
 
+@interface NSCachedURLResponse (FixLeakyDataMethod)
+
+- (NSData *)fixedData;
+
+@end
+
+@implementation NSCachedURLResponse (FixLeakyDataMethod)
+
+/* Document this hacky-hack fix.
+ 
+ Background
+ ----------
+ 
+ NSCachedURLResponse leaks the contents of its data method every time the method is called. See the thread here:
+ 
+     https://github.com/steipete/SDURLCache/issues/7#issuecomment-5066300
+ 
+ To get around this, we're using JRSwizzle to replace the implimentation of Apple's `data` method with our own. Check
+ the retain count on the returned data object. If it increments every time we access it, we know this is buggy code. 
+ Call autorelease on the returned object to get it back down to baseline, and return it. As hacky as this is, it should
+ be safe from crashes, since we are exclicitly testing for the existance of this bug before calling our autorelease 
+ chain.
+ */
+
+- (NSData *)fixedData
+{
+    NSError *error = nil;
+    [NSCachedURLResponse jr_swizzleMethod:@selector(data) withMethod:@selector(fixedData) error:&error];
+    NSData *data;
+    if (self.data.retainCount == self.data.retainCount)
+    {
+        data = [self data];
+    }
+    else
+    {
+        data = [self data].autorelease.autorelease.autorelease;
+    }
+    [NSCachedURLResponse jr_swizzleMethod:@selector(fixedData) withMethod:@selector(data) error:&error];
+    return data;
+}
+
+@end
+
 
 @implementation NSCachedURLResponse(NSCoder)
 
@@ -315,6 +359,15 @@ inline void dispatch_async_afreentrant(dispatch_queue_t queue, dispatch_block_t 
 @end
 
 @implementation SDURLCache
+
++(void)load
+{
+    NSError *error = nil;
+    if ([NSCachedURLResponse jr_swizzleMethod:@selector(fixedData) withMethod:@selector(data) error:&error] == NO)
+    {
+        NSLog(@"Error swizzling NSCachedURLResponse data method, %@", error);
+    }
+}
 
 #pragma mark SDURLCache (tools)
 
