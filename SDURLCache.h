@@ -10,17 +10,14 @@
 
 #import <Foundation/Foundation.h>
 
-@interface SDURLCache : NSURLCache
-{
+@interface SDURLCache : NSURLCache {
     @private
-    NSString *_diskCachePath;
-    NSMutableDictionary *_diskCacheInfo;
     BOOL _diskCacheInfoDirty;
     BOOL _ignoreMemoryOnlyStoragePolicy;
+    BOOL _timerPaused;
     NSUInteger _diskCacheUsage;
     NSTimeInterval _minCacheInterval;
     dispatch_source_t _maintenanceTimer;
-    BOOL _timerPaused;
 }
 
 /*
@@ -40,6 +37,16 @@
  * The default value is YES
  */
 @property (nonatomic, assign) BOOL ignoreMemoryOnlyStoragePolicy;
+
+
+/*
+ * Allow caching responses for a request with a cache policy that ignores the local cache.
+ * Usually, these responses don't need to be cached, because a request that ignores the cache
+ * once is likely to do so every time it is used.
+ * 
+ * The default value is NO.
+ */
+@property (nonatomic, assign) BOOL allowCachingResponsesToNonCachedRequests;
 
 /*
  * Returns a default cache director path to be used at cache initialization. The generated path directory
@@ -69,5 +76,11 @@
  * Returns whether a cached response is fresh enough to be used as-is, without any extra revalidation.
  */
 - (BOOL)isCachedResponseFresh:(NSCachedURLResponse *)response;
+
+/*
+ * Clears the receiver’s in-memory cache, removing all stored cached URL responses there.
+ * Has no effect on the on-disk cache.
+ */
+- (void)removeAllCachedResponsesInMemory;
 
 @end
