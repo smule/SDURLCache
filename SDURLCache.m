@@ -299,13 +299,16 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
     NSError *error = nil;
     [NSCachedURLResponse jr_swizzleMethod:@selector(data) withMethod:@selector(fixedData) error:&error];
     NSData *data;
-    if (self.data.retainCount == self.data.retainCount)
+    @synchronized(self)
     {
-        data = [self data];
-    }
-    else
-    {
-        data = [self data].autorelease.autorelease.autorelease;
+        if (self.data.retainCount == self.data.retainCount)
+        {
+            data = [self data];
+        }
+        else
+        {
+            data = [self data].autorelease.autorelease.autorelease;
+        }
     }
     [NSCachedURLResponse jr_swizzleMethod:@selector(fixedData) withMethod:@selector(data) error:&error];
     return data;
