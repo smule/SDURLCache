@@ -23,7 +23,7 @@
 
 #import "SDURLCache.h"
 #import <CommonCrypto/CommonDigest.h>
-#import "JRSwizzle.h"
+#import <objc/runtime.h>
 
 #define kAFURLCachePath @"SDNetworkingURLCache"
 #define kAFURLCacheMaintenanceTime 5ull
@@ -276,6 +276,13 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
 
 @end
 
+void swapInstanceMethodsOnObject(Class theClass, SEL oldSel, SEL newSel)
+{
+    Method oldMethod = class_getInstanceMethod(theClass, oldSel);
+    Method newMethod = class_getInstanceMethod(theClass, newSel);
+    method_exchangeImplementations(oldMethod, newMethod);
+}
+
 @implementation NSCachedURLResponse (FixLeakyDataMethod)
 
 /* Document this hacky-hack fix.
@@ -294,10 +301,14 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
  chain.
  */
 
++(void)load
+{
+    swapInstanceMethodsOnObject(self, @selector(data), @selector(fixedData));
+}
+
 - (NSData *)fixedData
 {
-    NSError *error = nil;
-    [NSCachedURLResponse jr_swizzleMethod:@selector(data) withMethod:@selector(fixedData) error:&error];
+    swapInstanceMethodsOnObject([self class], @selector(data), @selector(fixedData));
     NSData *data;
     @synchronized(self)
     {
@@ -310,7 +321,7 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
             data = [self data].autorelease.autorelease.autorelease;
         }
     }
-    [NSCachedURLResponse jr_swizzleMethod:@selector(fixedData) withMethod:@selector(data) error:&error];
+    swapInstanceMethodsOnObject([self class], @selector(fixedData), @selector(data));
     return data;
 }
 
@@ -362,15 +373,6 @@ inline void dispatch_async_afreentrant(dispatch_queue_t queue, dispatch_block_t 
 @end
 
 @implementation SDURLCache
-
-+(void)load
-{
-    NSError *error = nil;
-    if ([NSCachedURLResponse jr_swizzleMethod:@selector(fixedData) withMethod:@selector(data) error:&error] == NO)
-    {
-        NSLog(@"Error swizzling NSCachedURLResponse data method, %@", error);
-    }
-}
 
 #pragma mark SDURLCache (tools)
 
