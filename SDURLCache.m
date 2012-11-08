@@ -23,6 +23,7 @@
 
 #import "SDURLCache.h"
 #import <CommonCrypto/CommonDigest.h>
+#import <objc/runtime.h>
 
 #define kAFURLCachePath @"SDNetworkingURLCache"
 #define kAFURLCacheMaintenanceTime 5ull
@@ -271,6 +272,63 @@ static NSDate *_parseHTTPDate(const char *buf, size_t bufLen) {
 
     return(date);
 }
+
+@interface NSCachedURLResponse (FixLeakyDataMethod)
+
+- (NSData *)fixedData;
+
+@end
+
+void swapInstanceMethodsOnObject(Class theClass, SEL oldSel, SEL newSel)
+{
+    Method oldMethod = class_getInstanceMethod(theClass, oldSel);
+    Method newMethod = class_getInstanceMethod(theClass, newSel);
+    method_exchangeImplementations(oldMethod, newMethod);
+}
+
+@implementation NSCachedURLResponse (FixLeakyDataMethod)
+
+/* Document this hacky-hack fix.
+ 
+ Background
+ ----------
+ 
+ NSCachedURLResponse leaks the contents of its data method every time the method is called. See the thread here:
+ 
+     https://github.com/steipete/SDURLCache/issues/7#issuecomment-5066300
+ 
+ To get around this, we're using JRSwizzle to replace the implimentation of Apple's `data` method with our own. Check
+ the retain count on the returned data object. If it increments every time we access it, we know this is buggy code. 
+ Call autorelease on the returned object to get it back down to baseline, and return it. As hacky as this is, it should
+ be safe from crashes, since we are exclicitly testing for the existance of this bug before calling our autorelease 
+ chain.
+ */
+
++(void)load
+{
+    swapInstanceMethodsOnObject(self, @selector(data), @selector(fixedData));
+}
+
+- (NSData *)fixedData
+{
+    swapInstanceMethodsOnObject([self class], @selector(data), @selector(fixedData));
+    NSData *data;
+    @synchronized(self)
+    {
+        if (self.data.retainCount == self.data.retainCount)
+        {
+            data = [self data];
+        }
+        else
+        {
+            data = [self data].autorelease.autorelease.autorelease;
+        }
+    }
+    swapInstanceMethodsOnObject([self class], @selector(fixedData), @selector(data));
+    return data;
+}
+
+@end
 
 
 @implementation NSCachedURLResponse(NSCoder)
