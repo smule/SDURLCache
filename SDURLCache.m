@@ -311,18 +311,25 @@ void swapInstanceMethodsOnObject(Class theClass, SEL oldSel, SEL newSel)
 
 - (NSData *)fixedData
 {
+#if !TARGET_OS_IPHONE
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        LogWarn(@"WARN_OSX: idk how this was ever working. I commented out some things (may be a mem leak now)");
+    });
+#endif
+    
     swapInstanceMethodsOnObject([self class], @selector(data), @selector(fixedData));
     NSData *data;
     @synchronized(self)
     {
-        if (self.data.retainCount == self.data.retainCount)
+        //if (self.data.retainCount == self.data.retainCount)
         {
             data = [self data];
         }
-        else
-        {
-            data = [self data].autorelease.autorelease.autorelease;
-        }
+        //else
+        //{
+        //    data = [self data].autorelease.autorelease.autorelease;
+        //}
     }
     swapInstanceMethodsOnObject([self class], @selector(fixedData), @selector(data));
     return data;
@@ -846,7 +853,7 @@ static dispatch_queue_t get_disk_io_queue() {
 - (void)dealloc {
     if(_maintenanceTimer) {
         dispatch_source_cancel(_maintenanceTimer);
-        dispatch_release(_maintenanceTimer);
+        //dispatch_release(_maintenanceTimer);
     }
     _diskCachePath = nil;
     _diskCacheInfo = nil;
