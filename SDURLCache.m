@@ -306,7 +306,21 @@ void swapInstanceMethodsOnObject(Class theClass, SEL oldSel, SEL newSel)
 
 +(void)load
 {
-    swapInstanceMethodsOnObject(self, @selector(data), @selector(fixedData));
+#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 70000
+#warning Get rid of This Bullshit
+    /*
+     In iOS 6 we're leaking (see notes above) in iOS 7, this bug has been fixed
+     by adding the data object to an autorelease pool (hence the retain count
+     still increments, but it is decremented at a future date. We added
+     @autorelease pools to cause the extra retain count to be cleaned up ASAP.
+     */
+#endif
+
+    // If we are less than iOS 7, apply the hack
+    if ([[[UIDevice currentDevice] systemVersion] compare:@"7" options:NSNumericSearch] == NSOrderedAscending)
+    {
+        swapInstanceMethodsOnObject(self, @selector(data), @selector(fixedData));
+    }
 }
 
 - (NSData *)fixedData
